@@ -1,0 +1,165 @@
+{
+  "$schema": "household-coordination-hub-data-contract",
+  "version": "1.0.0",
+  "notes": "Defines core entities, fields, and the shared API error shape for the MVP. Not an ORM/migration script — a contract for frontend/backend agreement.",
+  "entities": {
+    "User": {
+      "description": "Local shadow record synced from the external identity provider on first login.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "identityProviderId": { "type": "string", "description": "Subject/user ID from the external IdP." },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "createdAt": { "type": "timestamptz" }
+      }
+    },
+    "Household": {
+      "description": "The central tenancy boundary. All shared resources belong to a household.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "name": { "type": "string" },
+        "timezone": { "type": "string", "description": "IANA timezone string, e.g. 'America/Chicago'. Used for display and recurrence generation." },
+        "inviteCode": { "type": "string", "description": "Shareable code/link token used for self-join." },
+        "createdAt": { "type": "timestamptz" },
+        "isDeleted": { "type": "boolean", "default": false, "note": "Household deletion is deferred past MVP; field reserved for future use." }
+      }
+    },
+    "HouseholdMembership": {
+      "description": "Join entity between User and Household. Structured as many-to-many now to support multi-household later, though MVP enforces one active household per user at the application layer.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "userId": { "type": "uuid", "foreignKey": "User.id" },
+        "householdId": { "type": "uuid", "foreignKey": "Household.id" },
+        "role": { "type": "enum", "values": ["Owner", "Member"] },
+        "joinedAt": { "type": "timestamptz" }
+      }
+    },
+    "Task": {
+      "description": "A household task/chore. Supports optional assignment and open-pool claiming.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "householdId": { "type": "uuid", "foreignKey": "Household.id" },
+        "title": { "type": "string" },
+        "description": { "type": "string", "nullable": true },
+        "assignedUserId": { "type": "uuid", "foreignKey": "User.id", "nullable": true, "note": "Null = open for any member to claim." },
+        "dueAt": { "type": "timestamptz", "nullable": true },
+        "isCompleted": { "type": "boolean", "default": false },
+        "completedAt": { "type": "timestamptz", "nullable": true },
+        "completedByUserId": { "type": "uuid", "foreignKey": "User.id", "nullable": true },
+        "recurrenceId": { "type": "uuid", "nullable": true, "description": "Shared across all generated instances of the same recurring task." },
+        "isDeleted": { "type": "boolean", "default": false },
+        "deletedAt": { "type": "timestamptz", "nullable": true },
+        "createdAt": { "type": "timestamptz" },
+        "rowVersion": { "type": "xmin", "description": "Postgres system column used as the EF Core optimistic concurrency token." }
+      }
+    },
+    "RecurrenceRule": {
+      "description": "Defines the recurrence pattern used to generate Task or CalendarEvent instances.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "householdId": { "type": "uuid", "foreignKey": "Household.id" },
+        "frequency": { "type": "enum", "values": ["Daily", "Weekly", "Monthly", "Custom"] },
+        "interval": { "type": "integer", "description": "e.g. every 1 week, every 2 weeks." },
+        "daysOfWeek": { "type": "array<string>", "nullable": true },
+        "startDate": { "type": "date" },
+        "isActive": { "type": "boolean", "default": true, "description": "Set false to stop future generation without deleting past instances." }
+      }
+    },
+    "List": {
+      "description": "A shared list (grocery, supplies, or custom).",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "householdId": { "type": "uuid", "foreignKey": "Household.id" },
+        "name": { "type": "string" },
+        "type": { "type": "enum", "values": ["Grocery", "Supplies", "Custom"] },
+        "isDeleted": { "type": "boolean", "default": false },
+        "createdAt": { "type": "timestamptz" }
+      }
+    },
+    "ListItem": {
+      "description": "An item within a List. Checked items remain visible until manually cleared.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "listId": { "type": "uuid", "foreignKey": "List.id" },
+        "name": { "type": "string" },
+        "quantity": { "type": "string", "nullable": true },
+        "isCompleted": { "type": "boolean", "default": false },
+        "completedByUserId": { "type": "uuid", "foreignKey": "User.id", "nullable": true },
+        "completedAt": { "type": "timestamptz", "nullable": true },
+        "isDeleted": { "type": "boolean", "default": false },
+        "createdAt": { "type": "timestamptz" }
+      }
+    },
+    "CalendarEvent": {
+      "description": "A household calendar event. Participants are informational tags only, not a visibility filter.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "householdId": { "type": "uuid", "foreignKey": "Household.id" },
+        "title": { "type": "string" },
+        "description": { "type": "string", "nullable": true },
+        "startAt": { "type": "timestamptz" },
+        "endAt": { "type": "timestamptz", "nullable": true },
+        "recurrenceId": { "type": "uuid", "nullable": true },
+        "isDeleted": { "type": "boolean", "default": false },
+        "deletedAt": { "type": "timestamptz", "nullable": true },
+        "createdAt": { "type": "timestamptz" }
+      }
+    },
+    "CalendarEventParticipant": {
+      "description": "Informational tagging of a user against an event. Does not restrict visibility.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "calendarEventId": { "type": "uuid", "foreignKey": "CalendarEvent.id" },
+        "userId": { "type": "uuid", "foreignKey": "User.id" }
+      }
+    },
+    "ActivityEvent": {
+      "description": "A record of a change within a household, for the activity feed. Persists even if the referenced entity is later soft-deleted.",
+      "fields": {
+        "id": { "type": "uuid", "primaryKey": true },
+        "householdId": { "type": "uuid", "foreignKey": "Household.id" },
+        "actorUserId": { "type": "uuid", "foreignKey": "User.id" },
+        "entityType": { "type": "enum", "values": ["Task", "List", "ListItem", "CalendarEvent", "HouseholdMembership"] },
+        "entityId": { "type": "uuid" },
+        "action": { "type": "enum", "values": ["Created", "Updated", "Completed", "Claimed", "Deleted", "MemberJoined", "MemberRemoved"] },
+        "summary": { "type": "string", "description": "Denormalized human-readable snapshot, e.g. 'Alex claimed Take out trash', so the feed remains readable even if the source entity changes or is deleted later." },
+        "createdAt": { "type": "timestamptz" }
+      }
+    }
+  },
+  "apiErrorShape": {
+    "description": "Consistent error response shape returned by the global exception-handling middleware for all endpoints.",
+    "example": {
+      "error": {
+        "code": "CONCURRENCY_CONFLICT",
+        "message": "This task was updated by someone else. Refresh and try again.",
+        "traceId": "00-abc123..."
+      }
+    },
+    "knownCodes": [
+      "NOT_FOUND",
+      "FORBIDDEN",
+      "VALIDATION_ERROR",
+      "CONCURRENCY_CONFLICT",
+      "INTERNAL_ERROR"
+    ]
+  },
+  "realtimeEvents": {
+    "description": "SignalR events broadcast to the household group (household-{householdId}) after a successful write.",
+    "events": [
+      "task.created",
+      "task.updated",
+      "task.claimed",
+      "task.completed",
+      "task.deleted",
+      "listItem.created",
+      "listItem.updated",
+      "listItem.deleted",
+      "calendarEvent.created",
+      "calendarEvent.updated",
+      "calendarEvent.deleted",
+      "membership.joined",
+      "membership.removed"
+    ]
+  }
+}
