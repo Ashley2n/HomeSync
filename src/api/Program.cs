@@ -1,10 +1,16 @@
+using System.Security.Claims;
 using infrastructure.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+var clerkIssuer = builder.Configuration["Clerk:Issuer"];
+var allowedOrigins = builder.Configuration.GetSection("Clerk:AuthorizedParties").Get<string[]>()
+                     ?? throw new InvalidOperationException("Clerk:AuthorizedParties must be configured.");
+// e.g. ["http://localhost:3000", "https://homesync.vercel.app"]// Add services to the container.
 
-// Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
@@ -25,6 +31,38 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Clerk Authentication
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = clerkIssuer;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = clerkIssuer,
+
+            // Clerk doesnt have a standard 'aud', therefore skipped
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+
+            NameClaimType = "sub",
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var azp = context.Principal?.FindFirstValue("azp");
+                if (azp is null || !allowedOrigins.Contains(azp))
+                    context.Fail(("Token was not issued for an authorized origin."));
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -38,31 +76,9 @@ if (app.Environment.IsDevelopment())
     });}
 
 app.UseHttpsRedirection();
-app.MapControllers();
 app.UseCors("AllowNextJs");
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

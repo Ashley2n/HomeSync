@@ -5,6 +5,8 @@
 
 # dotenv files
 .env
+.env.*
+.env.local
 
 # User-specific files
 *.rsuser
@@ -34,6 +36,9 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+[Nn]ode_modules/
+.[Nn]ext/
+.next/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -482,3 +487,5 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+appsettings.*.json
+.env.*

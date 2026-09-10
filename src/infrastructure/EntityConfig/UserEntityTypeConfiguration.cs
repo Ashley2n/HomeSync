@@ -2,9 +2,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace infrastructure.ModelConfig;
+namespace infrastructure.EntityConfig;
 
-public class UserModelTypeConfiguration : IEntityTypeConfiguration<User>
+public class UserEntityTypeConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
