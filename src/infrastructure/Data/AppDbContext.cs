@@ -1,5 +1,4 @@
 ﻿using domain.Models;
-using infrastructure.EntityConfig;
 using Microsoft.EntityFrameworkCore;
 
 namespace infrastructure.Data;
