@@ -1,5 +1,8 @@
 using System.Security.Claims;
+using application.Interface;
 using infrastructure.Data;
+using infrastructure.Middleware;
+using infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -18,6 +21,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
+
+builder.Services.AddHttpContextAccessor();
+
+//DI Container
+builder.Services.AddScoped<ICurrentHouseholdContext, CurrentHouseholdContext>();
 
 //CORS 
 builder.Services.AddCors(options =>
@@ -74,6 +82,8 @@ if (app.Environment.IsDevelopment())
         options.WithTitle("My API Documentation")
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });}
+//Middleware
+app.UseMiddleware<HouseholdResolutionMiddleware>();
 
 app.UseHttpsRedirection();
 app.UseCors("AllowNextJs");
