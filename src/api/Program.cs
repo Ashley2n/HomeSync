@@ -55,7 +55,7 @@ builder.Services
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
 
-            NameClaimType = "sub",
+            NameClaimType = "sub"
         };
 
         options.Events = new JwtBearerEvents
@@ -64,7 +64,7 @@ builder.Services
             {
                 var azp = context.Principal?.FindFirstValue("azp");
                 if (azp is null || !allowedOrigins.Contains(azp))
-                    context.Fail(("Token was not issued for an authorized origin."));
+                    context.Fail("Token was not issued for an authorized origin.");
                 return Task.CompletedTask;
             }
         };
@@ -81,17 +81,17 @@ if (app.Environment.IsDevelopment())
     {
         options.WithTitle("My API Documentation")
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-    });}
-//Middleware
-app.UseMiddleware<HouseholdResolutionMiddleware>();
+    });
+}
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseCors("AllowNextJs");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<HouseholdResolutionMiddleware>();
 app.MapControllers();
 
 app.Run();
 
-
-public partial class Program {}
+public partial class Program { }
