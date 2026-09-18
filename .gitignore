@@ -491,3 +491,4 @@ $RECYCLE.BIN/
 appsettings.*.json
 !appsettings.json
 !appsettings.Development.json
+.vitest/
