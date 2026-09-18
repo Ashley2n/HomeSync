@@ -1,6 +1,3 @@
 ﻿namespace application.Dtos;
 
-public class ErrorResponse
-{
-    
-}
+public record ErrorResponse(string Message, int StatusCode, string RequestId );
