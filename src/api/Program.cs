@@ -45,6 +45,7 @@ builder.Services
     .AddJwtBearer(options =>
     {
         options.Authority = clerkIssuer;
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
