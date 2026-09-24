@@ -3,6 +3,7 @@ using application.Interface;
 using domain.Exceptions;
 using domain.Models;
 using infrastructure.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace application.Services;
 
@@ -22,6 +23,32 @@ public class UserService : IUserService
     {
         var users = await _userRepository.GetAllAsync();
         return users.Select(ToDto).ToList();
+    }
+
+    public async Task<User> GetOrCreateAsync(string idpId, string displayName, string email)
+    {
+        var existing = await _userRepository.GetByIdentityProviderIdAsync(idpId);
+        if (existing != null) return existing;
+
+        var newUser = new User
+        {
+            IdentityProviderId = idpId,
+            DisplayName = displayName,
+            Email = email,
+        };
+
+        try
+        {
+            await _userRepository.CreateAsync(newUser);
+            await _userRepository.SaveDbChangesAsync();
+            return newUser;
+        }
+        catch (DbUpdateException e)
+        {
+            existing = await _userRepository.GetByIdentityProviderIdAsync(idpId);
+            if (existing != null) return existing;
+            throw;
+        }
     }
 
     public async Task AddAsync(UserDto user)

@@ -1,5 +1,5 @@
-﻿using infrastructure.Data;
-using infrastructure.Interfaces;
+﻿using application.Interface;
+using infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace api.Middleware;
@@ -7,14 +7,14 @@ namespace api.Middleware;
 public class HouseholdResolutionMiddleware(RequestDelegate next)
 {
     /// <summary>
-    /// This middleware's job is "attach household id if we can, otherwise don't."
+    /// Attaches the caller's household id to the request if one is resolvable;
+    /// never throws for a legitimately missing user/household.
     /// </summary>
     /// <param name="context"> HttpContext</param>
     /// <param name="db"> AppDbContext</param>
-    /// <param name="userRepository"> User Repository</param>
-    public async Task InvokeAsync(HttpContext context, AppDbContext db, IUserRepository userRepository)
+    /// <param name="userService"> User Service</param>
+    public async Task InvokeAsync(HttpContext context, AppDbContext db, IUserService userService)
     {
-
         if (context.User.Identity?.IsAuthenticated != true)
         {
             await next(context);
@@ -22,21 +22,24 @@ public class HouseholdResolutionMiddleware(RequestDelegate next)
         }
 
         var identityProviderId = context.User.FindFirst("sub")?.Value;
-        if (identityProviderId == null)
+        var email = context.User.FindFirst("useremail")?.Value;
+        var displayName = context.User.FindFirst("username")?.Value;
+        if (identityProviderId == null
+            || email == null
+            || displayName == null)
         {
             await next(context);
             return;
         }
 
-        var user = await userRepository.GetByIdentityProviderIdAsync(identityProviderId);
-        if (user != null)
-        {
-            var householdId = await db.HouseholdMemberships
-                .Where(m => m.UserId == user.Id && !m.IsDeleted)
-                .Select(m => m.HouseholdId)
-                .FirstOrDefaultAsync();
-            context.Items["HouseholdId"] = householdId;
-        }
+
+
+        var user = await userService.GetOrCreateAsync(identityProviderId, displayName, email);
+        var householdId = await db.HouseholdMemberships
+            .Where(m => m.UserId == user.Id && !m.IsDeleted)
+            .Select(m => m.HouseholdId)
+            .FirstOrDefaultAsync();
+        context.Items["HouseholdId"] = householdId;
 
         await next(context);
     }
