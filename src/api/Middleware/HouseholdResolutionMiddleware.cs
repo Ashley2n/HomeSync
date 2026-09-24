@@ -4,14 +4,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace api.Middleware;
 
-public class HouseholdResolutionMiddleware(RequestDelegate next, IUserRepository userRepository)
+public class HouseholdResolutionMiddleware(RequestDelegate next)
 {
     /// <summary>
     /// This middleware's job is "attach household id if we can, otherwise don't."
     /// </summary>
     /// <param name="context"> HttpContext</param>
     /// <param name="db"> AppDbContext</param>
-    public async Task InvokeAsync(HttpContext context, AppDbContext db)
+    /// <param name="userRepository"> User Repository</param>
+    public async Task InvokeAsync(HttpContext context, AppDbContext db, IUserRepository userRepository)
     {
 
         if (context.User.Identity?.IsAuthenticated != true)
