@@ -1,36 +1,65 @@
 ﻿using application.Dtos;
 using application.Interface;
+using domain.Exceptions;
+using domain.Models;
 using infrastructure.Interfaces;
 
 namespace application.Services;
 
 public class UserService : IUserService
 {
-    
     private readonly IUserRepository _userRepository;
-    
-    public Task<UserDto?> GetByIdAsync(Guid id)
+
+    public UserService(IUserRepository userRepository)
     {
-        throw new NotImplementedException();
+        _userRepository = userRepository;
     }
 
-    public Task<List<UserDto>> GetAllAsync()
+    public async Task<UserDto?> GetByIdAsync(Guid id) =>
+        ToDto(await _userRepository.GetAsync(id));
+
+    public async Task<List<UserDto>> GetAllAsync()
     {
-        throw new NotImplementedException();
+        var users = await _userRepository.GetAllAsync();
+        return users.Select(ToDto).ToList();
     }
 
-    public Task AddAsync(UserDto user)
+    public async Task AddAsync(UserDto user)
     {
-        throw new NotImplementedException();
+        await _userRepository.CreateAsync(ToModel(user));
+        await _userRepository.SaveDbChangesAsync();
     }
 
-    public Task UpdateAsync(UserDto user)
+    public async Task UpdateAsync(UserDto dto, Guid id, CancellationToken ct = default)
     {
-        throw new NotImplementedException();
+        var user = await _userRepository.GetAsync(id, ct);
+
+        user.DisplayName = dto.DisplayName;
+        user.Email = dto.Email;
+
+        await _userRepository.SaveDbChangesAsync(ct);
     }
 
-    public Task DeleteAsync(Guid id)
+    public async Task DeleteAsync(Guid id)
     {
-        throw new NotImplementedException();
+        await _userRepository.DeleteAsync(id);
+        await _userRepository.SaveDbChangesAsync();
     }
+
+    public UserDto ToDto(User user) => new UserDto(
+        IdentityProviderId: user.IdentityProviderId,
+        DisplayName: user.DisplayName,
+        Email: user.Email,
+        IsDeleted: user.IsDeleted,
+        CreatedAt: user.CreatedAt
+    );
+
+    public User ToModel(UserDto dto) => new User
+    {
+        IdentityProviderId = dto.IdentityProviderId,
+        DisplayName = dto.DisplayName,
+        Email = dto.Email,
+        IsDeleted = dto.IsDeleted,
+        CreatedAt = dto.CreatedAt
+    };
 }

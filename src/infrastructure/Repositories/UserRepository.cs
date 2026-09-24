@@ -6,11 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace infrastructure.Repositories;
 
-public class UserRepository : GenericRepository<User>, IUserRepository
+public class UserRepository(AppDbContext context) : GenericRepository<User>(context), IUserRepository
 {
-    public UserRepository(AppDbContext context) : base(context) { }
-
-    public Task<User?> GetByIdentityProviderIdAsync(string idpId) => 
-        _db.FirstOrDefaultAsync(x => x.IdentityProviderId == idpId && !x.IsDeleted);
+    public Task<User?> GetByIdentityProviderIdAsync(string idpId, CancellationToken ct  = default) => 
+        _db.FirstOrDefaultAsync(x => x.IdentityProviderId == idpId && !x.IsDeleted, ct);
     
 }

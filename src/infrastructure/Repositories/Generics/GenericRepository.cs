@@ -7,43 +7,41 @@ namespace infrastructure.Repositories.Generics;
 
 public class GenericRepository<T> : IRepository<T> where T : class
 {
-    private AppDbContext _context;
+    private readonly AppDbContext _context;
     protected DbSet<T> _db;
-    public GenericRepository(AppDbContext context)
+    protected GenericRepository(AppDbContext context)
     {
         _context = context;
         _db = _context.Set<T>();
     }
 
-    public async Task<List<T>> GetAllAsync()
+    public async Task<List<T>> GetAllAsync(CancellationToken ct = default)
     {
-        return await _db.ToListAsync();
+        return await _db.ToListAsync(ct);
     }
 
-    public async Task<T> GetAsync(Guid id)
+    public async Task<T> GetAsync(Guid id, CancellationToken ct = default)
     {
-        return await _db.FindAsync(id) ?? throw new NotFoundException(typeof(T).Name, id);
+        return await _db.FindAsync([id], ct) ?? throw new NotFoundException(typeof(T).Name, id);
     }
 
-    public async Task CreateAsync(T entity)
+    public async Task CreateAsync(T entity, CancellationToken ct = default)
     {
-        await _db.AddAsync(entity);
-        await _context.SaveChangesAsync();
+        await _db.AddAsync(entity, ct);
     }
 
-    public async Task UpdateAsync(T entity)
+    public Task UpdateAsync(T entity, Guid id, CancellationToken ct = default)
     {
-        _db.Update(entity);
-        await _context.SaveChangesAsync();
+         _db.Update(entity);
+         return Task.CompletedTask;
     }
 
-    public async Task DeleteAsync(Guid id)
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        T? entity = await _db.FindAsync(id);
-        if (entity != null)
-        {
-            _db.Remove(entity);
-            await _context.SaveChangesAsync();
-        }
+        var entity = await GetAsync(id, ct);
+        _db.Remove(entity);
     }
+    public async Task SaveDbChangesAsync(CancellationToken ct = default) => 
+    await _context.SaveChangesAsync(ct);
+    
 }

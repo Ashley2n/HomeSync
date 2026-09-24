@@ -1,8 +1,11 @@
 using System.Security.Claims;
+using api.Middleware;
 using application.Interface;
+using application.Services;
 using infrastructure.Data;
+using infrastructure.Interfaces;
 using infrastructure.Middleware;
-using infrastructure.Services;
+using infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -25,7 +28,14 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 
 //DI Container
+
+//Repository
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+// Services
 builder.Services.AddScoped<ICurrentHouseholdContext, CurrentHouseholdContext>();
+builder.Services.AddScoped<IUserService, UserService>();
+
 
 //CORS 
 builder.Services.AddCors(options =>
@@ -95,4 +105,6 @@ app.MapControllers();
 
 app.Run();
 
-public partial class Program { }
+public partial class Program
+{
+}
