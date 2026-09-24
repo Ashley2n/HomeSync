@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (build + test)
+    runs-on: ubuntu-latest
+    env:
+      # Program.cs throws at startup without these, and the WebApplicationFactory
+      # tests boot Program.cs. Fake values are fine: tests use InMemory + a fake auth handler.
+      Clerk__Issuer: https://example.clerk.accounts.dev
+      Clerk__AuthorizedParties__0: http://localhost:3000
+      ConnectionStrings__DefaultConnection: Host=localhost;Database=ci;Username=ci;Password=ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet restore HomeSyncSln.sln
+      - run: dotnet build HomeSyncSln.sln --no-restore -c Release
+      - run: dotnet test HomeSyncSln.sln --no-build -c Release
+
+  frontend:
+    name: Frontend (lint + types + test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/client/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+        env:
+          # Public/placeholder values only. Real secrets do not belong in this file.
+          NEXT_PUBLIC_BASE_DOTNET_API: http://localhost:5236
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+          CLERK_SECRET_KEY: sk_test_placeholder

@@ -1,5 +1,11 @@
 using System.Security.Claims;
+using api.Middleware;
+using application.Interface;
+using application.Services;
 using infrastructure.Data;
+using infrastructure.Interfaces;
+using infrastructure.Middleware;
+using infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -19,6 +25,18 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
+builder.Services.AddHttpContextAccessor();
+
+//DI Container
+
+//Repository
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+// Services
+builder.Services.AddScoped<ICurrentHouseholdContext, CurrentHouseholdContext>();
+builder.Services.AddScoped<IUserService, UserService>();
+
+
 //CORS 
 builder.Services.AddCors(options =>
 {
@@ -37,6 +55,7 @@ builder.Services
     .AddJwtBearer(options =>
     {
         options.Authority = clerkIssuer;
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -47,7 +66,7 @@ builder.Services
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
 
-            NameClaimType = "sub",
+            NameClaimType = "sub"
         };
 
         options.Events = new JwtBearerEvents
@@ -56,7 +75,7 @@ builder.Services
             {
                 var azp = context.Principal?.FindFirstValue("azp");
                 if (azp is null || !allowedOrigins.Contains(azp))
-                    context.Fail(("Token was not issued for an authorized origin."));
+                    context.Fail("Token was not issued for an authorized origin.");
                 return Task.CompletedTask;
             }
         };
@@ -73,15 +92,19 @@ if (app.Environment.IsDevelopment())
     {
         options.WithTitle("My API Documentation")
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
-    });}
+    });
+}
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseCors("AllowNextJs");
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<HouseholdResolutionMiddleware>();
 app.MapControllers();
 
 app.Run();
 
-
-public partial class Program {}
+public partial class Program
+{
+}

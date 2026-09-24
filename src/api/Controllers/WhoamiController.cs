@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,5 +23,5 @@ public class WhoamiController : ControllerBase
     }
 
     [HttpGet]
-    public IActionResult GetAll() => Ok(new {status = "Controller is wiredup, no auth required"});
+    public IActionResult GetAll() => Ok(new {status = "Controller is wired up, no auth required"});
 }
