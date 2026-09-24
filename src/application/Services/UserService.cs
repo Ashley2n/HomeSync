@@ -1,33 +1,25 @@
 ﻿using application.Dtos;
 using application.Interface;
-using domain.Exceptions;
 using domain.Models;
 using infrastructure.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace application.Services;
 
-public class UserService : IUserService
+public class UserService(IUserRepository userRepository) : IUserService
 {
-    private readonly IUserRepository _userRepository;
-
-    public UserService(IUserRepository userRepository)
-    {
-        _userRepository = userRepository;
-    }
-
     public async Task<UserDto?> GetByIdAsync(Guid id) =>
-        ToDto(await _userRepository.GetAsync(id));
+        ToDto(await userRepository.GetAsync(id));
 
     public async Task<List<UserDto>> GetAllAsync()
     {
-        var users = await _userRepository.GetAllAsync();
+        var users = await userRepository.GetAllAsync();
         return users.Select(ToDto).ToList();
     }
 
     public async Task<User> GetOrCreateAsync(string idpId, string displayName, string email)
     {
-        var existing = await _userRepository.GetByIdentityProviderIdAsync(idpId);
+        var existing = await userRepository.GetByIdentityProviderIdAsync(idpId);
         if (existing != null) return existing;
 
         var newUser = new User
@@ -39,13 +31,13 @@ public class UserService : IUserService
 
         try
         {
-            await _userRepository.CreateAsync(newUser);
-            await _userRepository.SaveDbChangesAsync();
+            await userRepository.CreateAsync(newUser);
+            await userRepository.SaveDbChangesAsync();
             return newUser;
         }
-        catch (DbUpdateException e)
+        catch (DbUpdateException)
         {
-            existing = await _userRepository.GetByIdentityProviderIdAsync(idpId);
+            existing = await userRepository.GetByIdentityProviderIdAsync(idpId);
             if (existing != null) return existing;
             throw;
         }
@@ -53,24 +45,24 @@ public class UserService : IUserService
 
     public async Task AddAsync(UserDto user)
     {
-        await _userRepository.CreateAsync(ToModel(user));
-        await _userRepository.SaveDbChangesAsync();
+        await userRepository.CreateAsync(ToModel(user));
+        await userRepository.SaveDbChangesAsync();
     }
 
     public async Task UpdateAsync(UserDto dto, Guid id, CancellationToken ct = default)
     {
-        var user = await _userRepository.GetAsync(id, ct);
+        var user = await userRepository.GetAsync(id, ct);
 
         user.DisplayName = dto.DisplayName;
         user.Email = dto.Email;
 
-        await _userRepository.SaveDbChangesAsync(ct);
+        await userRepository.SaveDbChangesAsync(ct);
     }
 
     public async Task DeleteAsync(Guid id)
     {
-        await _userRepository.DeleteAsync(id);
-        await _userRepository.SaveDbChangesAsync();
+        await userRepository.DeleteAsync(id);
+        await userRepository.SaveDbChangesAsync();
     }
 
     public UserDto ToDto(User user) => new UserDto(

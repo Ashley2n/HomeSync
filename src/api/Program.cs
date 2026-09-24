@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using CurrentHouseholdContext = application.Services.CurrentHouseholdContext;
 
 var builder = WebApplication.CreateBuilder(args);
 var clerkIssuer = builder.Configuration["Clerk:Issuer"];
@@ -31,10 +32,13 @@ builder.Services.AddHttpContextAccessor();
 
 //Repository
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IHouseholdRepository, HouseholdRepository>();
 
 // Services
 builder.Services.AddScoped<ICurrentHouseholdContext, CurrentHouseholdContext>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IHouseholdService, HouseholdService>();
+
 
 
 //CORS 

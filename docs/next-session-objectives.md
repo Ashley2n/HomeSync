@@ -19,27 +19,29 @@ Building Phase 1 (Household, HouseholdMembership CRUD) before these are real mea
 retrofitting tenancy onto entities that already exist — more expensive later than
 now, per the roadmap's own guiding principle.
 
-## Session 1 — actually close out Phase 0
+## Session 1 — actually close out Phase 0 ✅ done (2026-09-24)
 
-- [ ] Fix `HouseholdResolutionMiddleware`'s DI crash — move `IUserRepository` from
-      constructor injection to `InvokeAsync` method injection (scoped service can't
-      be constructor-injected into conventional middleware, which is built once
-      against the root provider).
-- [ ] Fix CI's `tsc`/`LayoutProps` failure — add `npx next typegen` before
-      `npx tsc --noEmit` in `.github/workflows/ci.yml` (Next generates the ambient
-      `LayoutProps`/`PageProps` types into `.next/types`, which doesn't exist yet on
-      a clean CI checkout).
-- [ ] Build the shadow-record sync: `IUserService.GetOrCreateAsync(idpId, email,
-      displayName)` → `IUserRepository`, called from `HouseholdResolutionMiddleware`
-      (or a dedicated earlier middleware) instead of the current look-up-and-no-op.
-      This also resolves the `Guid.Empty`-as-household-id bug as a side effect,
-      since "brand-new user, no household yet" becomes a real handled branch.
-- [ ] Add a unique index + migration on `User.IdentityProviderId` (needed for the
-      get-or-create to be race-safe under concurrent first-requests).
-- [ ] Re-enable the tenancy query filter properly: inject `ICurrentHouseholdContext`
-      into `AppDbContext`'s own constructor and reference that as a field in
-      `HasQueryFilter`, rather than injecting it into the `IEntityTypeConfiguration`
-      class (that's what caused the circular-dependency bug that got commented out).
+- [x] Fix `HouseholdResolutionMiddleware`'s DI crash — moved `IUserRepository`/
+      `IUserService` off the constructor onto `InvokeAsync` method injection.
+      Verified: `dotnet test` 9/9 passing, host starts cleanly.
+- [x] Fix CI's `tsc`/`LayoutProps` failure — `npx next typegen` added before
+      `npx tsc --noEmit` in `.github/workflows/ci.yml`.
+- [x] Build the shadow-record sync: `IUserService.GetOrCreateAsync(idpId,
+      displayName, email)` wired into `HouseholdResolutionMiddleware`, reading
+      claims from `context.User.FindFirst(...)`. Reviewed twice; both bugs found
+      along the way (dead `context.Items` read, exception-wrapping regression)
+      are fixed.
+- [x] Unique index + migration on `User.IdentityProviderId`
+      (`20260924173208_AddUnqieIndexOnUserIdpID`).
+- [x] Tenancy query filter re-enabled on `HouseholdMembership` in
+      `AppDbContext.OnModelCreating`, reading `ICurrentHouseholdContext` via
+      constructor injection. Interface relocated to `infrastructure.Interfaces`
+      to fix the reference-direction conflict; duplicate-class build break from
+      that move is fixed. `dotnet build` clean, 9/9 tests passing.
+
+Two trivial cosmetic leftovers, not blocking: a stale comment in
+`HouseholdMembershipTypeConfiguration.cs`, and an unnecessary `using` alias in
+`Program.cs` left over from resolving the duplicate-class conflict.
 
 ## Session 2 — start Phase 1 (household lifecycle)
 

@@ -1,4 +1,4 @@
-﻿namespace application.Interface;
+﻿namespace infrastructure.Interfaces;
 
 public interface ICurrentHouseholdContext
 {
