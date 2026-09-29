@@ -20,6 +20,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Moq" />
     <PackageReference Include="xunit.runner.visualstudio">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -29,10 +30,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\api\api.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="integration\" />
   </ItemGroup>
 
 </Project>

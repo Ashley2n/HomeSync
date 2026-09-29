@@ -36,6 +36,7 @@ public class HouseholdResolutionMiddleware(RequestDelegate next)
 
         var user = await userService.GetOrCreateAsync(identityProviderId, displayName, email);
         var householdId = await db.HouseholdMemberships
+            .IgnoreQueryFilters()
             .Where(m => m.UserId == user.Id && !m.IsDeleted)
             .Select(m => m.HouseholdId)
             .FirstOrDefaultAsync();
