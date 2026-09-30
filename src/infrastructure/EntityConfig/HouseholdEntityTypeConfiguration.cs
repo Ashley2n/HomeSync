@@ -19,6 +19,7 @@ public class HouseholdEntityTypeConfiguration : IEntityTypeConfiguration<Househo
             .HasMaxLength(20)
             .IsRequired();
         builder.HasIndex(x => x.InviteCode)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false");
     }
 }
