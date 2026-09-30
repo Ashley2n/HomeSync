@@ -1,7 +1,6 @@
 ﻿using domain.Exceptions;
 using domain.Models;
 using infrastructure.Repositories;
-using Moq;
 using test.setup;
 
 namespace test.unit.Repository;
@@ -15,19 +14,33 @@ public class HouseholdRepositoryTests
         var repo = new HouseholdRepository(db);
 
         var household = new Household { Name = "Test Household", InviteCode = "ABC123" };
-        await repo.CreateAsync(household, It.IsAny<CancellationToken>());
-        await repo.SaveDbChangesAsync(It.IsAny<CancellationToken>());
+        await repo.CreateAsync(household, TestContext.Current.CancellationToken);
+        await repo.SaveDbChangesAsync(TestContext.Current.CancellationToken);
 
         Assert.NotEqual(Guid.Empty, household.Id);
     }
 
     [Fact]
-    public async Task GetAsync_MissingId_ThrowsNotFoundException()
+    public async Task GetAsync_MissingId_Propagates()
     {
-        var db = InMemoryAppDbContextFactory.Create(nameof(GetAsync_MissingId_ThrowsNotFoundException));
+        var db = InMemoryAppDbContextFactory.Create(nameof(GetAsync_MissingId_Propagates));
         var repo = new HouseholdRepository(db);
 
-        var ex = await Assert.ThrowsAsync<NotFoundException>(() => repo.GetAsync(Guid.NewGuid(), It.IsAny<CancellationToken>()));
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() => repo.GetAsync(Guid.NewGuid(), TestContext.Current.CancellationToken));
+        Assert.Contains("Household", ex.Message);
+    }
+    [Fact]
+    public async Task GetAsync_DeletedId_Propagates()
+    {
+        var db = InMemoryAppDbContextFactory.Create(nameof(GetAsync_DeletedId_Propagates));
+        var repo = new HouseholdRepository(db);
+        var household = HouseholdSeeding.BaseModel(isDelete:true);
+        
+        await repo.CreateAsync(household, TestContext.Current.CancellationToken);
+        await repo.SaveDbChangesAsync(TestContext.Current.CancellationToken);
+        db.ChangeTracker.Clear();
+
+        var ex = await Assert.ThrowsAsync<NotFoundException>(() => repo.GetAsync(household.Id, TestContext.Current.CancellationToken));
         Assert.Contains("Household", ex.Message);
     }
 
@@ -37,10 +50,10 @@ public class HouseholdRepositoryTests
         var db = InMemoryAppDbContextFactory.Create(nameof(GetAllAsync_ExcludesSoftDeletedHouseholds));
         db.Households.Add(new Household { Name = "Visible", InviteCode = "V1" });
         db.Households.Add(new Household { Name = "Deleted", InviteCode = "D1", IsDeleted = true });
-        await db.SaveChangesAsync(It.IsAny<CancellationToken>());
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var repo = new HouseholdRepository(db);
-        var results = await repo.GetAllAsync(It.IsAny<CancellationToken>());
+        var results = await repo.GetAllAsync(TestContext.Current.CancellationToken);
 
         Assert.Single(results);
         Assert.Equal("Visible", results[0].Name);

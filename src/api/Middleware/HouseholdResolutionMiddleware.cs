@@ -32,15 +32,19 @@ public class HouseholdResolutionMiddleware(RequestDelegate next)
             return;
         }
 
-
-
         var user = await userService.GetOrCreateAsync(identityProviderId, displayName, email);
+
+        // IgnoreQueryFilters also drops the Households filter, so !h.IsDeleted must be explicit.
         var householdId = await db.HouseholdMemberships
             .IgnoreQueryFilters()
-            .Where(m => m.UserId == user.Id && !m.IsDeleted)
-            .Select(m => m.HouseholdId)
+            .Where(m => m.UserId == user.Id
+                        && !m.IsDeleted
+                        && db.Households.Any(h => h.Id == m.HouseholdId && !h.IsDeleted))
+            .Select(m => (Guid?)m.HouseholdId)
             .FirstOrDefaultAsync();
-        context.Items["HouseholdId"] = householdId;
+
+        if (householdId is not null)
+            context.Items["HouseholdId"] = householdId.Value;
 
         await next(context);
     }

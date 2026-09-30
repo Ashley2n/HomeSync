@@ -8,7 +8,7 @@ public interface IHouseholdService
     Task <HouseholdDto?> GetByIdAsync(Guid id);
     Task AddAsync(HouseholdDto dto);
     Task UpdateAsync(HouseholdDto dto, Guid id, CancellationToken ct = default);
-    Task DeleteAsync(Guid id);
+    Task DeleteAsync(Guid id, CancellationToken ct = default);
     HouseholdDto? ToDto(Household dto);
     Household? ToModel(HouseholdDto dto);
 }

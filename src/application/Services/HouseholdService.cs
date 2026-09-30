@@ -26,10 +26,13 @@ public class HouseholdService(IHouseholdRepository householdRepository) : IHouse
         await householdRepository.SaveDbChangesAsync(ct);
     }
 
-    public async Task DeleteAsync(Guid id)
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        await householdRepository.DeleteAsync(id);
-        await householdRepository.SaveDbChangesAsync();
+        var household = await householdRepository.GetAsync(id, ct);
+        
+        household.IsDeleted = true;
+        
+        await householdRepository.SaveDbChangesAsync(ct);
     }
 
     public HouseholdDto ToDto(Household dto) => new HouseholdDto(
