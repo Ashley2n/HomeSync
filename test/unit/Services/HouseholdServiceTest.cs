@@ -1,5 +1,7 @@
 ﻿using application.Dtos;
+using application.Interface;
 using application.Services;
+using domain.Enums;
 using domain.Exceptions;
 using domain.Models;
 using infrastructure.Interfaces;
@@ -12,59 +14,89 @@ namespace test.unit.Services;
 public class HouseholdServiceTest
 {
     [Fact]
-    public async Task AddAsync_CreatesAndSaves()
+    public async Task AddAsync_CreatesHouseholdAndOwnerMembership_SavesOnce()
     {
-        var repo = new Mock<IHouseholdRepository>();
-        var service = new HouseholdService(repo.Object);
-        var dto = HouseholdSeeding.BaseDto();
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        iGen.Setup(g => g.Generate()).Returns("TESTCODE");
+        var service = new HouseholdService(hRepo.Object, mRepo.Object, iGen.Object);
+        var userId = Guid.NewGuid();
+        var dto = HouseholdSeeding.CreateDto(name: "  Household1  ");
 
-        await service.AddAsync(dto);
+        // Capture what the service hands to each repository so the two rows can be compared.
+        // Assigning Id mimics EF, which generates the Guid key when the entity is added;
+        // without it both ids stay Guid.Empty and the link assertion below proves nothing.
+        Household? createdHousehold = null;
+        HouseholdMembership? createdMembership = null;
+        hRepo.Setup(r => r.CreateAsync(It.IsAny<Household>(), It.IsAny<CancellationToken>()))
+            .Callback<Household, CancellationToken>((h, _) => { h.Id = Guid.NewGuid(); createdHousehold = h; });
+        mRepo.Setup(r => r.CreateAsync(It.IsAny<HouseholdMembership>(), It.IsAny<CancellationToken>()))
+            .Callback<HouseholdMembership, CancellationToken>((m, _) => createdMembership = m);
 
-        repo.Verify(r => r.CreateAsync(
-            It.Is<Household>(h => h.Name == "Household1" && h.InviteCode == "ABC123"),
-            It.IsAny<CancellationToken>()), Times.Once);
-        repo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        await service.AddAsync(dto, userId, TestContext.Current.CancellationToken);
+
+        // Household: trimmed name, generated code, never created deleted
+        Assert.NotNull(createdHousehold);
+        Assert.Equal("Household1", createdHousehold.Name);
+        Assert.Equal(dto.Timezone, createdHousehold.Timezone);
+        Assert.Equal("TESTCODE", createdHousehold.InviteCode);
+        Assert.False(createdHousehold.IsDeleted);
+
+        // Membership: links the caller to *this* household as Owner
+        Assert.NotNull(createdMembership);
+        Assert.Equal(userId, createdMembership.UserId);
+        Assert.Equal(createdHousehold.Id, createdMembership.HouseholdId);
+        Assert.Equal(Roles.Owner, createdMembership.Role);
+
+        // One save covers both rows
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task DeleteAsync_Success_SetsIsDeletedAndSaves()
     {
-        var repo = new Mock<IHouseholdRepository>();
-        var service = new HouseholdService(repo.Object);
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object,  mRepo.Object, iGen.Object);
         var seeded = HouseholdSeeding.BaseModel();        
-        repo.Setup(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()))
+        hRepo.Setup(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(seeded);
 
         await service.DeleteAsync(seeded.Id, TestContext.Current.CancellationToken);
 
         Assert.True(seeded.IsDeleted);
-        repo.Verify(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()), Times.Once);
-        repo.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
-        repo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        hRepo.Verify(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()), Times.Once);
+        hRepo.Verify(r => r.DeleteAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()), Times.Never);
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task DeleteAsync_MissingId_Propagates()
     {
-        var repo = new Mock<IHouseholdRepository>();
-        var service = new HouseholdService(repo.Object);
+        var hRepo = new Mock<IHouseholdRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var service = new HouseholdService(hRepo.Object,  mRepo.Object, iGen.Object);
         var id = Guid.NewGuid();
-        repo.Setup(r => r.GetAsync(id, It.IsAny<CancellationToken>()))
+        hRepo.Setup(r => r.GetAsync(id, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new NotFoundException(nameof(Household), id));
         //Act
         await Assert.ThrowsAsync<NotFoundException>(() => service.DeleteAsync(id, TestContext.Current.CancellationToken));
         //Assert
-        repo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()),  Times.Never);
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()),  Times.Never);
     }
 
     [Fact]
     public async Task GetByIdAsync_NotFound_Propagates()
     {
-        var repo = new Mock<IHouseholdRepository>();
-        repo.Setup(r => r.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object,  mRepo.Object, iGen.Object);
+        hRepo.Setup(r => r.GetAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new NotFoundException(nameof(Household), Guid.NewGuid()));
-
-        var service = new HouseholdService(repo.Object);
 
         await Assert.ThrowsAsync<NotFoundException>(() => service.GetByIdAsync(Guid.NewGuid()));
     }
@@ -74,10 +106,12 @@ public class HouseholdServiceTest
     {
         // Arrange
         var seeded = HouseholdSeeding.BaseModel();
-        var repo = new Mock<IHouseholdRepository>();
-        var service = new HouseholdService(repo.Object);
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object,  mRepo.Object, iGen.Object);
 
-        repo.Setup(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()))
+        hRepo.Setup(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(seeded);
 
         // Act
@@ -96,9 +130,11 @@ public class HouseholdServiceTest
     {
         var seeded = HouseholdSeeding.BaseModel();
         var dto = HouseholdSeeding.BaseDto(name:"Renamed", inviteCode:"123ABC");
-        var repo = new Mock<IHouseholdRepository>();
-        var service = new HouseholdService(repo.Object);
-        repo.Setup(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()))
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object,  mRepo.Object, iGen.Object);
+        hRepo.Setup(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(seeded);
 
         //Act
@@ -111,7 +147,7 @@ public class HouseholdServiceTest
         Assert.Equal("Renamed",  result.Name);
         Assert.Equal("123ABC", result.InviteCode);
         Assert.Equal(seeded.IsDeleted, result.IsDeleted);
-        repo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         
     }
     [Fact]
@@ -119,51 +155,118 @@ public class HouseholdServiceTest
     {
         var seeded = HouseholdSeeding.BaseModel();
         var dto = HouseholdSeeding.BaseDto(name:"Rename", inviteCode:"123ABC", isDelete:true);
-        var repo = new Mock<IHouseholdRepository>();
-        var service = new HouseholdService(repo.Object);
-        repo.Setup(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()))
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object,  mRepo.Object, iGen.Object);
+        hRepo.Setup(r => r.GetAsync(seeded.Id, It.IsAny<CancellationToken>()))
             .ThrowsAsync(new NotFoundException(nameof(Household), Guid.Empty));
 
         //Act
         await Assert.ThrowsAsync<NotFoundException>( () => service.UpdateAsync(dto, seeded.Id, TestContext.Current.CancellationToken));
         
         //Assert
-        repo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
 
     }
 
     [Fact]
-    public void ToModel_MapsObjects_returnsValidModel()
+    public async Task AddAsync_WithDuplicateFields_Propagates()
     {
-        var repo = new Mock<IHouseholdRepository>();
-        var service = new HouseholdService(repo.Object);
-        var dto = HouseholdSeeding.BaseDto(name: "Household2", inviteCode: "ABC124", isDelete: true);
-
-        //Act 
-        var result = service.ToModel(dto);
-
-        //Assert
-        Assert.NotNull(result);
-        Assert.Equal(dto.Name, result.Name);
-        Assert.Equal(dto.InviteCode, result.InviteCode);
-        Assert.Equal(dto.IsDeleted,  result.IsDeleted);
-        Assert.Equal(dto.Timezone, result.Timezone);
-    }
-
-    [Fact]
-    public async Task AddAsync_SaveThrows_Propagates()
-    {
-        var repo = new Mock<IHouseholdRepository>();
-        repo.SetupSequence(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()))
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object,  mRepo.Object, iGen.Object);
+        hRepo.SetupSequence(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask) // 1st call: succeeds
             .ThrowsAsync(new DbUpdateException("duplicate key value violates unique constraint")); // 2nd call: fails
 
-        var service = new HouseholdService(repo.Object);
-        var dto1 = HouseholdSeeding.BaseDto(name: "Household1", inviteCode: "ABC123");
-        var dto2 = HouseholdSeeding.BaseDto(name: "Household2", inviteCode: "ABC123");
+        var dto1 = HouseholdSeeding.CreateDto(name: "Household1");
+        var dto2 = HouseholdSeeding.CreateDto(name: "Household2");
 
-        await service.AddAsync(dto1); // succeeds — no exception
+        await service.AddAsync(dto1,Guid.NewGuid(), TestContext.Current.CancellationToken); // succeeds — no exception
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => service.AddAsync(dto2)); // fails
+        await Assert.ThrowsAsync<DbUpdateException>(() => service.AddAsync(dto2,Guid.NewGuid(), TestContext.Current.CancellationToken)); // fails
+    }
+    
+    [Fact]
+    public async Task AddAsync_UserAlreadyHasMembership_ThrowsConflict_NothingCreated()
+    {
+        var userId = Guid.NewGuid();
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object, mRepo.Object, iGen.Object);
+        // The mock only answers the question; the service has to decide to throw.
+        mRepo.Setup(r => r.HasActiveMembershipsAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            service.AddAsync(HouseholdSeeding.CreateDto(), userId, TestContext.Current.CancellationToken));
+
+        hRepo.Verify(r => r.CreateAsync(It.IsAny<Household>(), It.IsAny<CancellationToken>()), Times.Never);
+        mRepo.Verify(r => r.CreateAsync(It.IsAny<HouseholdMembership>(), It.IsAny<CancellationToken>()), Times.Never);
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task AddAsync_BlankName_ThrowsValidation_NothingSaved(string name)
+    {
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object, mRepo.Object, iGen.Object);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            service.AddAsync(HouseholdSeeding.CreateDto(name: name), Guid.NewGuid(), TestContext.Current.CancellationToken));
+
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AddAsync_NameOver100Chars_ThrowsValidation_NothingSaved()
+    {
+        var name = new string('a', 101);
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object, mRepo.Object, iGen.Object);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            service.AddAsync(HouseholdSeeding.CreateDto(name: name), Guid.NewGuid(), TestContext.Current.CancellationToken));
+
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AddAsync_NameWithin100CharsAfterTrim_Succeeds()
+    {
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object, mRepo.Object, iGen.Object);
+        var name = "  " + new string('a', 100) + "  "; // 104 raw, 100 once trimmed
+
+        var result = await service.AddAsync(HouseholdSeeding.CreateDto(name: name), Guid.NewGuid(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(100, result.Name.Length);
+    }
+
+    [Theory]
+    [InlineData("Not/AZone")]
+    [InlineData("")]
+    public async Task AddAsync_InvalidTimezone_ThrowsValidation_NothingSaved(string timezone)
+    {
+        var hRepo = new Mock<IHouseholdRepository>();
+        var mRepo = new Mock<IHouseholdMembershipRepository>();
+        var iGen = new Mock<IInviteCodeGenerator>();
+        var service = new HouseholdService(hRepo.Object, mRepo.Object, iGen.Object);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            service.AddAsync(HouseholdSeeding.CreateDto(timezone: timezone), Guid.NewGuid(), TestContext.Current.CancellationToken));
+
+        hRepo.Verify(r => r.SaveDbChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

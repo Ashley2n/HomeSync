@@ -1,18 +1,49 @@
 ﻿using application.Dtos;
+using application.Dtos.Create;
 using application.Interface;
+using domain.Enums;
+using domain.Exceptions;
 using domain.Models;
 using infrastructure.Interfaces;
 
 namespace application.Services;
 
-public class HouseholdService(IHouseholdRepository householdRepository) : IHouseholdService
+public class HouseholdService(IHouseholdRepository householdRepository, IHouseholdMembershipRepository membershipRepository, IInviteCodeGenerator inviteCodeGenerator) : IHouseholdService
 {
     public async Task<HouseholdDto?> GetByIdAsync(Guid id) => ToDto(await householdRepository.GetAsync(id));
 
-    public async Task AddAsync(HouseholdDto dto)
+    
+    public async Task<HouseholdDto> AddAsync(HouseholdCreateDto dto, Guid userId, CancellationToken ct = default)
     {
-        await householdRepository.CreateAsync(ToModel(dto));
-        await householdRepository.SaveDbChangesAsync();
+        // Trim once so the length check measures what actually gets saved.
+        var name = dto.Name.Trim();
+        if (name.Length == 0)
+            throw new ValidationException("Name is required.");
+        if (name.Length > 100)
+            throw new ValidationException("Name must be 100 characters or fewer.");
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(dto.Timezone, out _))
+            throw new ValidationException($"'{dto.Timezone}' is not a recognized timezone.");
+        if (await membershipRepository.HasActiveMembershipsAsync(userId, ct))
+            throw new ConflictException("User already belongs to a household.");
+
+        var household = new Household
+        {
+            Name = name,
+            Timezone = dto.Timezone,
+            InviteCode =  inviteCodeGenerator.Generate(),
+            IsDeleted = false
+        };
+        await householdRepository.CreateAsync(household, ct);
+        await membershipRepository.CreateAsync(new HouseholdMembership
+        {
+            UserId = userId,
+            HouseholdId = household.Id,
+            Role = Roles.Owner,
+            JoinedAt = DateTime.UtcNow
+        }, ct);
+
+        await householdRepository.SaveDbChangesAsync(ct);
+        return ToDto(household);
     }
 
     public async Task UpdateAsync(HouseholdDto dto, Guid id, CancellationToken ct = default)
@@ -34,18 +65,13 @@ public class HouseholdService(IHouseholdRepository householdRepository) : IHouse
         
         await householdRepository.SaveDbChangesAsync(ct);
     }
+    
 
     public HouseholdDto ToDto(Household dto) => new HouseholdDto(
+        Id: dto.Id,
         Name: dto.Name,
         Timezone: dto.Timezone,
         InviteCode: dto.InviteCode,
-        IsDeleted: dto.IsDeleted);
-
-    public Household ToModel(HouseholdDto dto) => new Household()
-    {
-        Name = dto.Name,
-        Timezone = dto.Timezone,
-        InviteCode = dto.InviteCode,
-        IsDeleted = dto.IsDeleted
-    };
+        IsDeleted: dto.IsDeleted
+        );
 }

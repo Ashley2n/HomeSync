@@ -33,11 +33,13 @@ builder.Services.AddHttpContextAccessor();
 //Repository
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IHouseholdRepository, HouseholdRepository>();
+builder.Services.AddScoped<IHouseholdMembershipRepository, HouseholdMembershipRepository>();
 
 // Services
 builder.Services.AddScoped<ICurrentHouseholdContext, CurrentHouseholdContext>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IHouseholdService, HouseholdService>();
+builder.Services.AddScoped<IInviteCodeGenerator, InviteCodeGenerator>();
 
 
 

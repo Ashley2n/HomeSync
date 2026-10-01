@@ -24,10 +24,13 @@ public class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions
         if (authHeader.ToString() != "Bearer valid-test-token")
             return Task.FromResult(AuthenticateResult.Fail("Invalid test token"));
 
+        // useremail/username are required by HouseholdResolutionMiddleware to resolve the user.
         var claims = new[]
         {
             new Claim("sub", "user_test123"),
-            new Claim("azp", "http://localhost:3000")
+            new Claim("azp", "http://localhost:3000"),
+            new Claim("useremail", "test@example.com"),
+            new Claim("username", "Test User")
         };
 
         var identity = new ClaimsIdentity(claims, SchemeName);

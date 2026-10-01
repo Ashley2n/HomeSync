@@ -1,4 +1,5 @@
 ﻿using application.Dtos;
+using application.Dtos.Create;
 using domain.Models;
 
 namespace application.Interface;
@@ -6,9 +7,8 @@ namespace application.Interface;
 public interface IHouseholdService
 {
     Task <HouseholdDto?> GetByIdAsync(Guid id);
-    Task AddAsync(HouseholdDto dto);
+    Task<HouseholdDto> AddAsync(HouseholdCreateDto dto, Guid userId, CancellationToken ct = default);
     Task UpdateAsync(HouseholdDto dto, Guid id, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
     HouseholdDto? ToDto(Household dto);
-    Household? ToModel(HouseholdDto dto);
 }

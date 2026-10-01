@@ -1,6 +1,7 @@
-﻿namespace application.Dtos;
+namespace application.Dtos;
 
 public record HouseholdDto(
+    Guid Id,
     string Name,
     string Timezone,
     string InviteCode,

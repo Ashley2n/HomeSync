@@ -27,6 +27,7 @@ public class HouseholdResolutionMiddlewareTest
         var nextCalled = await RunAsync(context, db, userService.Object);
 
         Assert.True(nextCalled);
+        Assert.Equal(userId, context.Items["UserId"]);
         Assert.Equal(householdId, context.Items["HouseholdId"]);
         // Identity resolution (existing vs. brand-new user) is UserService's concern;
         // the middleware only has to pass along the claim values it read.

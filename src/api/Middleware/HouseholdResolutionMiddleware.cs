@@ -33,6 +33,7 @@ public class HouseholdResolutionMiddleware(RequestDelegate next)
         }
 
         var user = await userService.GetOrCreateAsync(identityProviderId, displayName, email);
+        context.Items["UserId"] = user.Id;
 
         // IgnoreQueryFilters also drops the Households filter, so !h.IsDeleted must be explicit.
         var householdId = await db.HouseholdMemberships
